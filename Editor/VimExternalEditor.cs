@@ -138,12 +138,6 @@ namespace Vim.Editor
             return EditorPrefs.GetBool(k_force_foreground_key, false);
         }
 
-        const string k_gen_vs_sln_key = "vimcode_gen_vs_sln";
-        static bool ShouldGenerateVisualStudioSln()
-        {
-            return EditorPrefs.GetBool(k_gen_vs_sln_key, true);
-        }
-
         enum SetPathBehaviour
         {
             None,
@@ -208,16 +202,6 @@ namespace Vim.Editor
                 if (GUILayout.Button("Reset file extensions", GUILayout.Width(200)))
                 {
                     EditorPrefs.DeleteKey(k_codeassets_key);
-                }
-
-                var prev_should_gen_vs_sln = ShouldGenerateVisualStudioSln();
-                var new_should_gen_vs_sln = EditorGUILayout.Toggle(new GUIContent(
-                            "Generate Visual Studio Solution",
-                            "Generate sln and csproj when user clicks 'Open C# Project'. Useful for debugging with Visual Studio, working with vscode, using OmniSharp, etc."),
-                        prev_should_gen_vs_sln);
-                if (new_should_gen_vs_sln != prev_should_gen_vs_sln)
-                {
-                    EditorPrefs.SetBool(k_gen_vs_sln_key, new_should_gen_vs_sln);
                 }
 
                 var prev_should_force_fg = ShouldForceToForeground();
