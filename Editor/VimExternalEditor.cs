@@ -19,16 +19,20 @@ namespace Vim.Editor
     public class VimExternalEditor : IExternalCodeEditor
     {
 
-        static VimExternalEditor()
-        {
-            var editor = new VimExternalEditor();
-            CodeEditor.Register(editor);
-        }
+        IGenerator m_ProjectGeneration;
 
-        VimExternalEditor()
+        public VimExternalEditor(IGenerator projectGeneration)
         {
             m_Installations = BuildInstalls();
+            m_ProjectGeneration = projectGeneration;
         }
+
+        static VimExternalEditor()
+        {
+            var projectGeneration = new ProjectGeneration(Directory.GetParent(Application.dataPath).FullName);
+            var editor = new VimExternalEditor(projectGeneration);
+            CodeEditor.Register(editor);
+	}
 
         static CodeEditor.Installation[] BuildInstalls()
         {
@@ -174,11 +178,6 @@ namespace Vim.Editor
             return GetCodeAssets().Split(',');
         }
 
-
-        /// Unity calls this method when it populates "Preferences/External Tools" in
-        /// order to allow the code editor to generate necessary GUI. For example, when
-        /// creating an an argument field for modifying the arguments sent to the code
-        /// editor.
         public void OnGUI()
         {
             var style = new GUIStyle
@@ -271,8 +270,61 @@ namespace Vim.Editor
 
             }
 
+            EditorGUILayout.LabelField("Generate .csproj files for:");
+            EditorGUI.indentLevel++;
+            SettingsButton(ProjectGenerationFlag.Embedded, "Embedded packages", "");
+            SettingsButton(ProjectGenerationFlag.Local, "Local packages", "");
+            SettingsButton(ProjectGenerationFlag.Registry, "Registry packages", "");
+            SettingsButton(ProjectGenerationFlag.Git, "Git packages", "");
+            SettingsButton(ProjectGenerationFlag.BuiltIn, "Built-in packages", "");
+#if UNITY_2019_3_OR_NEWER
+            SettingsButton(ProjectGenerationFlag.LocalTarBall, "Local tarball", "");
+#endif
+            SettingsButton(ProjectGenerationFlag.Unknown, "Packages from unknown sources", "");
+            RegenerateProjectFiles();
+            EditorGUI.indentLevel--;
         }
 
+        void RegenerateProjectFiles()
+        {
+            var rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect(new GUILayoutOption[] { }));
+            rect.width = 252;
+            if (GUI.Button(rect, "Regenerate project files"))
+            {
+                m_ProjectGeneration.Sync();
+            }
+        }
+
+        void SettingsButton(ProjectGenerationFlag preference, string guiMessage, string toolTip)
+        {
+            var prevValue = m_ProjectGeneration.AssemblyNameProvider.ProjectGenerationFlag.HasFlag(preference);
+            var newValue = EditorGUILayout.Toggle(new GUIContent(guiMessage, toolTip), prevValue);
+            if (newValue != prevValue)
+            {
+                m_ProjectGeneration.AssemblyNameProvider.ToggleProjectGeneration(preference);
+            }
+        }
+
+        public void CreateIfDoesntExist()
+        {
+            if (!m_ProjectGeneration.SolutionExists())
+            {
+                m_ProjectGeneration.Sync();
+            }
+        }
+
+        public void SyncIfNeeded(string[] addedFiles, string[] deletedFiles, string[] movedFiles, string[] movedFromFiles, string[] importedFiles)
+        {
+            (m_ProjectGeneration.AssemblyNameProvider as IPackageInfoCache)?.ResetPackageInfoCache();
+            m_ProjectGeneration.SyncIfNeeded(addedFiles.Union(deletedFiles).Union(movedFiles).Union(movedFromFiles).ToList(), importedFiles);
+        }
+
+        public void SyncAll()
+        {
+            (m_ProjectGeneration.AssemblyNameProvider as IPackageInfoCache)?.ResetPackageInfoCache();
+            AssetDatabase.Refresh();
+            m_ProjectGeneration.Sync();
+        }
 
         bool IsCodeAsset(string filePath)
         {
@@ -299,19 +351,6 @@ namespace Vim.Editor
             return true;
         }
 
-        /// Unity calls this function during initialization in order to sync the
-        /// Project. This is different from SyncIfNeeded in that it does not get a list
-        /// of changes.
-        public void SyncAll()
-        {
-            //~ Debug.Log($"[VimExternalEditor] SyncAll ");
-            if (ShouldGenerateVisualStudioSln())
-            {
-                RegenerateVisualStudioSolution();
-                Debug.Log($"[VimExternalEditor] Regenerated Visual Studio solution");
-            }
-        }
-
         // Unlike 'Open C# Project', this only generates the sln (does not
         // update asset database or open any file).
         //
@@ -331,13 +370,6 @@ namespace Vim.Editor
 			var synchronizer_sync_fn = synchronizer_type.GetMethod("Sync", BindingFlags.Public | BindingFlags.Instance);
 
 			synchronizer_sync_fn.Invoke(synchronizer_object, null);
-        }
-
-        /// When you change Assets in Unity, this method for the current chosen
-        /// instance of IExternalCodeEditor parses the new and changed Assets.
-        public void SyncIfNeeded(string[] addedFiles, string[] deletedFiles, string[] movedFiles, string[] movedFromFiles, string[] importedFiles)
-        {
-            //~ Debug.Log($"[VimExternalEditor] SyncIfNeeded {addedFiles.Length}");
         }
 
         /// Unity stores the path of the chosen editor. An instance of
@@ -399,7 +431,6 @@ namespace Vim.Editor
 
             return Process.Start(start_info);
         }
-
 
         void RequestForeground(Process p)
         {
