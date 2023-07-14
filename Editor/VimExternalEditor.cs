@@ -36,38 +36,18 @@ namespace Vim.Editor
 
         static CodeEditor.Installation[] BuildInstalls()
         {
-            var installs = new List<CodeEditor.Installation>(){
-                // Unity will automatically filter out paths that don't
-                // exist on disk. Use some standard paths and search in
-                // PATH.
-                new CodeEditor.Installation{
-                    Name = "MacVim",
-                    // Installed with brew
-                    Path = "/usr/local/bin/mvim",
-                },
-                new CodeEditor.Installation{
-                    Name = "Vim",
-                    // Linux
-                    Path = "/usr/share/vim/gvim",
-                },
-            };
+            //HACK path not available in macos so add homebrew path here
+            var path = Environment.GetEnvironmentVariable("PATH");
+            path += Path.PathSeparator + "/opt/homebrew/bin/";
 
-            var all_installs = Environment.GetEnvironmentVariable("PATH")
-                .Split(Path.PathSeparator)
+            var all_installs = path.Split(Path.PathSeparator)
                 // We could limit our search to folders named vim, but that won't
                 // catch scoop-installed vim and maybe others (chocolatey).
                 .SelectMany(p => GetVimExeInFolder(p))
                 .ToArray();
 
-            //~ Debug.Log($"[VimExternalEditor] Possible installs:");
-            //~ foreach (var entry in all_installs)
-            //~ {
-            //~     Debug.Log($"[VimExternalEditor] {entry.Path} {File.Exists(entry.Path)}");
-            //~ }
-
             return all_installs;
         }
-
 
         static readonly string[] k_executable_names =
         {
